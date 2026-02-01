@@ -1,0 +1,89 @@
+{
+  "prompt_metadata": {
+    "version": "1.0",
+    "framework": "RTCFR",
+    "target_output": "High-Fidelity AI Video"
+  },
+  "role": "Expert AI Cinematographer and High-Resolution Video Prompt Engineer specializing in photorealistic, utopian documentary filmmaking.",
+  "task": {
+    "title": "Vision of a New Tamil Nadu",
+    "description": "Generate a 60-90 second high-fidelity visionary travelogue.",
+    "primary_objective": "Showcase a futuristic, utopian version of Tamil Nadu across key sectors."
+  },
+  "context": {
+    "narrative_arc": [
+      {
+        "scene": "Opening",
+        "visual": "Cinematic fade-in from black",
+        "overlay_text": "நான் விரும்பும் தமிழ் நாடு",
+        "typography": "Elegant gold"
+      },
+      {
+        "scene": "Agriculture",
+        "focus": "The Green Revolution",
+        "visuals": "Sweeping aerial drone shots, lush organic paddy fields, modern sustainable tools",
+        "lighting": "Soft morning mist, 5000k",
+        "key_message": "100% Organic State status"
+      },
+      {
+        "scene": "Healthcare",
+        "focus": "The Healing Touch",
+        "visuals": "Sleek glass-fronted medical complex, sterile high-tech corridors, robotic assistants",
+        "branding": "Tamil Nadu Government Hospital (Mayo Clinic style)"
+      },
+      {
+        "scene": "Education",
+        "focus": "The Future",
+        "visuals": [
+          "Chennai Happy Schools with nature-integrated playgrounds",
+          "Tamil Nadu AI University with neo-futuristic architecture and vertical gardens"
+        ],
+        "style_reference": "MIT Massachusetts"
+      },
+      {
+        "scene": "Infrastructure",
+        "focus": "The Urban Flow",
+        "visuals": "6-lane smart highways, flowing traffic, European-style cobblestone pavements, heavy canopy tree cover"
+      },
+      {
+        "scene": "Lifestyle",
+        "focus": "Human Connection",
+        "visuals": "People cycling on dedicated lanes, outdoor cafes, sun-drenched lighting"
+      },
+      {
+        "scene": "Heritage",
+        "focus": "Cultural Legacy",
+        "visuals": "Orbital shots of Thanjai Periya Kovil and Mamallapuram, turquoise-water beaches"
+      },
+      {
+        "scene": "Closing",
+        "visual": "Panoramic sunset over Chennai skyline",
+        "overlay_text": "வாருங்கள் புதிய தமிழ் நாட்டை உருவாக்குவோம்"
+      }
+    ]
+  },
+  "format": {
+    "technical_specs": {
+      "resolution": "HD",
+      "style": "Photorealistic",
+      "color_grade": "Vibrant, warm, hopeful, utopian"
+    },
+    "camera_direction": {
+      "primary": "Dynamic Aerial Views",
+      "specifics": [
+        "Low-altitude fly-bys for schools/hospitals",
+        "High-altitude wide angles for agriculture/monuments"
+      ]
+    }
+  },
+  "requirements": {
+    "pacing_seconds": {
+      "agriculture": 15,
+      "healthcare": 12,
+      "education": 15,
+      "infrastructure": 12,
+      "lifestyle_heritage": 15
+    },
+    "transitions": "Seamless match cuts and zooms for continuous flow"
+  }
+}
