@@ -9,7 +9,7 @@ import tempfile
 
 st.set_page_config(page_title="Physics RAG System", layout="wide")
 
-st.title("📘 Physics Document RAG System")
+st.title(" Physics Document RAG System")
 
 rag = PhysicsRAG()
 
@@ -41,3 +41,4 @@ if query:
 
     st.markdown("### 📖 Answer")
     st.write(answer)
+
