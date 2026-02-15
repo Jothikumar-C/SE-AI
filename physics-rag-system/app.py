@@ -1,5 +1,5 @@
 """
-Streamlit UI Application:
+Streamlit UI Application
 """
 
 import streamlit as st
@@ -41,5 +41,6 @@ if query:
 
     st.markdown("### 📖 Answer")
     st.write(answer)
+
 
 
