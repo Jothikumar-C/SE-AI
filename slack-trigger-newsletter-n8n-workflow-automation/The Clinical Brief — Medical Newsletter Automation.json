@@ -1,0 +1,604 @@
+{
+  "name": "The Clinical Brief — Medical Newsletter Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🏥 The Clinical Brief — Workflow Overview\n\n**Trigger:** Slack slash command `/clinical-brief-newsletter [topic]` (e.g. `ebm`)\n\n**Flow:**\n1. Slack webhook receives POST → extracts topic → immediately acknowledges Slack (3-sec rule)\n2. Three APIs fetched in parallel: Semantic Scholar + Google CSE + SerpAPI\n3. All articles normalised → deduplicated → filtered (last 30 days)\n4. GPT-4o-mini generates a 2-section HTML newsletter\n5. HTML summary posted to #medical-updates on Slack\n6. Full personalised HTML emailed to recipients from Google Sheets\n\n**Stack:** n8n 2.8.3 self-hosted | GPT-4o-mini via HTTP | Slack Bot xoxb- | Gmail OAuth2 | Google Sheets OAuth2",
+        "height": 280,
+        "width": 520,
+        "color": 5
+      },
+      "id": "63153097-3314-452b-b4aa-cc06a407fe46",
+      "name": "Sticky Note — Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📡 Data Collection Strategy\n\n**Semantic Scholar** — Free, no key required. Returns peer-reviewed medical/clinical papers with abstracts, authors, publication dates. Best for EBM content.\n\n**Google Custom Search API** — Targets trusted medical platforms (NIH, WHO, Mayo Clinic, CDC). `dateRestrict=m1` filters to last 30 days. Requires key + CX.\n\n**SerpAPI** — Google News engine. Captures real-time health news and clinical developments. Requires API key.\n\n⚡ All 3 run **in parallel** from the same source node to minimise total latency before the LLM call.",
+        "height": 300,
+        "width": 460,
+        "color": 6
+      },
+      "id": "091a9e32-1d12-4831-a492-ddb43edf4c2d",
+      "name": "Sticky Note — Data Collection Strategy",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2992,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🤖 AI Processing — GPT-4o-mini\n\n**Decision 1: HTTP Request node chosen** (Option A)\n- Full control over request body, headers, and response parsing\n- No n8n version compatibility surprises (built-in OpenAI node has breaking param changes across versions)\n- Response path is explicit: `choices[0].message.content`\n- Transparent for learning: you see exactly what is sent/received\n\n**Model:** gpt-4o-mini — cost-efficient, adequate for structured newsletter HTML\n**max_tokens:** 4096 — enough for 2-section HTML newsletter\n**temperature:** 0.3 — low randomness for factual medical content",
+        "height": 290,
+        "width": 480,
+        "color": 3
+      },
+      "id": "741308a9-1fdd-485b-83d9-b34d1d81d955",
+      "name": "Sticky Note — AI Processing Strategy",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3568,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clinical-brief",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "02b30d6d-4b2a-4000-a8d7-e694161634d8",
+      "name": "Slack Slash Command Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        352
+      ],
+      "webhookId": "clinical-brief-webhook-2025"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst text = (body.text || '').trim();\nconst topic = text || 'evidence-based medicine';\nconst now = new Date();\nconst thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);\n\nreturn [{\n  json: {\n    topic: topic,\n    queryDate: now.toISOString(),\n    filterDate: thirtyDaysAgo.toISOString(),\n    dateFormatted: now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })\n  }\n}];"
+      },
+      "id": "45c93ea6-7305-4ae3-b401-c33e25b3461e",
+      "name": "Extract Topic & Dates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "{\"response_type\":\"ephemeral\",\"text\":\"Generating The Clinical Brief. Results will appear in #medical-updates shortly.\"}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "905d49d7-fd88-452a-84e6-a9b5429ad047",
+      "name": "Acknowledge Slack Command",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1952,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.semanticscholar.org/graph/v1/paper/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('Extract Topic & Dates').first().json.topic }}"
+            },
+            {
+              "name": "fields",
+              "value": "title,abstract,url,publicationDate,authors,venue,externalIds"
+            },
+            {
+              "name": "limit",
+              "value": "10"
+            },
+            {
+              "name": "fieldsOfStudy",
+              "value": "Medicine"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "a228cd9a-959a-4462-acad-aa63365f1819",
+      "name": "Fetch Academic Papers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1952,
+        208
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/customsearch/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_GOOGLE_CSE_API_KEY"
+            },
+            {
+              "name": "cx",
+              "value": "12518cbdb962a4a33"
+            },
+            {
+              "name": "q",
+              "value": "={{ $('Extract Topic & Dates').first().json.topic + ' medical clinical' }}"
+            },
+            {
+              "name": "dateRestrict",
+              "value": "m1"
+            },
+            {
+              "name": "num",
+              "value": "8"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "87e2a6a0-6164-4a42-bc18-4d26c9ee22aa",
+      "name": "Fetch Medical Web Articles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1952,
+        448
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "YOUR_SERPAPI_KEY"
+            },
+            {
+              "name": "engine",
+              "value": "google_news"
+            },
+            {
+              "name": "q",
+              "value": "={{ $('Extract Topic & Dates').first().json.topic + ' medical health' }}"
+            },
+            {
+              "name": "gl",
+              "value": "us"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b577155c-71ae-40b3-bbe1-30d6b4d64010",
+      "name": "Fetch Health News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1952,
+        704
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "feadacca-fce2-4e25-9c33-3235c671d6c5",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2432,
+        304
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst filterDate = new Date($('Extract Topic & Dates').first().json.filterDate);\nconst normalized = [];\nconst seenUrls = new Set();\n\nfor (const item of items) {\n  const data = item.json;\n\n  // Semantic Scholar: { data: [...papers] }\n  if (data.data && Array.isArray(data.data)) {\n    for (const paper of data.data) {\n      const url = paper.url ||\n        (paper.externalIds && paper.externalIds.DOI\n          ? 'https://doi.org/' + paper.externalIds.DOI\n          : null);\n      if (url && !seenUrls.has(url)) {\n        seenUrls.add(url);\n        normalized.push({\n          title: paper.title || 'Untitled',\n          description: paper.abstract || 'No abstract available.',\n          url: url,\n          source: paper.venue || 'Semantic Scholar',\n          publishedAt: paper.publicationDate || null,\n          type: 'academic'\n        });\n      }\n    }\n  }\n  // Google Custom Search: { items: [...results] }\n  else if (data.items && Array.isArray(data.items)) {\n    for (const result of data.items) {\n      const url = result.link;\n      if (url && !seenUrls.has(url)) {\n        seenUrls.add(url);\n        normalized.push({\n          title: result.title || 'Untitled',\n          description: result.snippet || '',\n          url: url,\n          source: result.displayLink || 'Web',\n          publishedAt: null,\n          type: 'web'\n        });\n      }\n    }\n  }\n  // SerpAPI Google News: { news_results: [...] }\n  else if (data.news_results && Array.isArray(data.news_results)) {\n    for (const newsItem of data.news_results) {\n      const url = newsItem.link;\n      if (url && !seenUrls.has(url)) {\n        seenUrls.add(url);\n        normalized.push({\n          title: newsItem.title || 'Untitled',\n          description: newsItem.snippet || '',\n          url: url,\n          source: newsItem.source && newsItem.source.name\n            ? newsItem.source.name\n            : (typeof newsItem.source === 'string' ? newsItem.source : 'News'),\n          publishedAt: newsItem.date || null,\n          type: 'news'\n        });\n      }\n    }\n  }\n}\n\nconst filtered = normalized.filter(a => {\n  if (!a.publishedAt) return true;\n  try {\n    return new Date(a.publishedAt) >= filterDate;\n  } catch(e) {\n    return true;\n  }\n});\n\nconst academic = filtered.filter(a => a.type === 'academic').slice(0, 5);\nconst web      = filtered.filter(a => a.type === 'web').slice(0, 4);\nconst news     = filtered.filter(a => a.type === 'news').slice(0, 4);\nconst final    = [...academic, ...web, ...news];\n\nif (final.length === 0) {\n  throw new Error('No articles found after normalisation. Verify API keys and that APIs are returning data.');\n}\n\nreturn final.map(a => ({ json: a }));"
+      },
+      "id": "414c58e0-cba3-4fd1-8a17-cc7a70ada740",
+      "name": "Normalise Deduplicate Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const articles = $input.all().map(item => item.json);\nconst topic = $('Extract Topic & Dates').first().json.topic;\nconst dateFormatted = $('Extract Topic & Dates').first().json.dateFormatted;\nconst currentYear = new Date().getFullYear();\n\nconst articleList = articles.map((a, i) =>\n  '[' + (i + 1) + '] TYPE: ' + a.type.toUpperCase() + '\\nTITLE: ' + a.title + '\\nSOURCE: ' + a.source + '\\nDATE: ' + (a.publishedAt || 'Recent') + '\\nSUMMARY: ' + a.description.substring(0, 400) + '\\nURL: ' + a.url\n).join('\\n\\n---\\n\\n');\n\nconst systemPrompt = 'You are Dr. Clara Bennett, a senior medical editor producing \"The Clinical Brief\" — a concise, evidence-based newsletter for healthcare professionals. You write with clinical precision and clarity. You always cite sources. Generate a complete, self-contained HTML email newsletter using ONLY inline CSS and table-based layout (no flexbox, no CSS grid, no <style> blocks — these are stripped by Gmail).';\n\nconst userPrompt = 'Generate \"The Clinical Brief\" newsletter dated ' + dateFormatted + ' on topic: \"' + topic + '\".\\n\\nIMPORTANT RULES:\\n- Use ONLY the articles provided below. Do NOT fabricate titles, abstracts, or URLs.\\n- Generate EXACTLY 4 sections: Section 1 = \"Research Highlights\" (use academic articles), Section 2 = \"Clinical News\" (use web and news articles).\\n- For each article: include a bold hyperlinked title, a 2-sentence clinical summary, and a source + date attribution line.\\n- Use ONLY inline CSS. No <style> blocks. Table-based layout only. No flexbox. No CSS grid.\\n\\nREQUIRED HTML STRUCTURE (follow exactly):\\n<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;border-collapse:collapse;\">\\n  <!-- HEADER -->\\n  <tr><td style=\"background-color:#1a3a5c;padding:24px 20px;text-align:center;\"><h1 style=\"color:#ffffff;margin:0;font-size:26px;font-weight:bold;letter-spacing:1px;\">The Clinical Brief</h1><p style=\"color:#a8c5e0;margin:8px 0 0 0;font-size:13px;\">' + dateFormatted + ' &nbsp;|&nbsp; ' + topic + '</p></td></tr>\\n  <!-- SECTION HEADER (repeat for each section) -->\\n  <tr><td style=\"background-color:#f0f4f8;padding:14px 20px;border-left:4px solid #1a3a5c;\"><h2 style=\"color:#1a3a5c;margin:0;font-size:18px;font-weight:bold;\">[Section Title]</h2></td></tr>\\n  <!-- ARTICLE ENTRY (repeat for each article) -->\\n  <tr><td style=\"padding:16px 20px;border-bottom:1px solid #e8e8e8;background-color:#ffffff;\"><p style=\"margin:0 0 6px 0;\"><a href=\"[article_url]\" style=\"color:#1a3a5c;font-weight:bold;text-decoration:none;font-size:15px;\">[Article Title]</a></p><p style=\"margin:0 0 10px 0;font-size:14px;color:#333333;line-height:1.6;\">[2-sentence clinical summary]</p><p style=\"margin:0;font-size:12px;color:#888888;\">Source: [source] &nbsp;|&nbsp; [date]</p></td></tr>\\n  <!-- FOOTER -->\\n  <tr><td style=\"background-color:#f0f4f8;padding:16px 20px;text-align:center;font-size:11px;color:#888888;border-top:2px solid #1a3a5c;line-height:1.6;\">The Clinical Brief is produced for educational purposes only and does not constitute medical advice. Always consult current clinical guidelines and institutional protocols for patient care decisions. &copy; ' + currentYear + ' The Clinical Brief</td></tr>\\n</table>\\n\\nARTICLES TO USE:\\n' + articleList + '\\n\\nReturn ONLY the complete HTML table element. No markdown. No code fences. No explanation. Start your response with <table and end with </table>.';\n\nconst openaiBody = JSON.stringify({\n  model: 'gpt-4o-mini',\n  max_tokens: 4096,\n  temperature: 0.3,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user',   content: userPrompt }\n  ]\n});\n\nreturn [{ json: { systemPrompt, userPrompt, topic, dateFormatted, openaiBody } }];"
+      },
+      "id": "63ad737f-580b-4e6b-b7d2-11606ea6658d",
+      "name": "Prepare LLM Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENAI_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.openaiBody }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "e53af4c2-8274-4775-ac3b-e1016f10bf26",
+      "name": "Generate Newsletter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3456,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\nif (!response.choices || !response.choices[0] || !response.choices[0].message) {\n  throw new Error('OpenAI response is missing expected structure. Raw response: ' + JSON.stringify(response).substring(0, 500));\n}\n\nlet html = response.choices[0].message.content;\n\n// Strip markdown code fences if the model included them\nhtml = html.replace(/^```html\\s*/i, '').replace(/^```\\s*/i, '').replace(/\\s*```$/i, '').trim();\n\n// Basic validation\nif (!html.toLowerCase().includes('<table')) {\n  throw new Error('Generated HTML does not contain a <table> element. Review the prompt in node 08 or check token limits.');\n}\nif (!html.includes('Clinical Brief')) {\n  throw new Error('Generated HTML does not contain \"Clinical Brief\". The LLM may have ignored the prompt structure.');\n}\n\nconst topic = $('Extract Topic & Dates').first().json.topic;\nconst dateFormatted = $('Extract Topic & Dates').first().json.dateFormatted;\n\nconst slackText = '*The Clinical Brief* — ' + dateFormatted + '\\n*Topic:* ' + topic + '\\n\\nThe newsletter has been generated and is being sent to all recipients on the mailing list. Full HTML edition delivered via email.';\n\nreturn [{ json: { html, topic, dateFormatted, slackText } }];"
+      },
+      "id": "e48ab424-0962-454c-8376-758f727b9a51",
+      "name": "Extract & Validate HTML Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3968,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0AFZ8TJ1D5",
+          "mode": "id"
+        },
+        "text": "={{ $json.slackText }}",
+        "otherOptions": {}
+      },
+      "id": "eeef33b2-6aa2-4bd2-b672-325d2dc27c10",
+      "name": "Post HTML Summary to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        4256,
+        272
+      ],
+      "webhookId": "90325416-4770-4a37-9401-abc095414dd9",
+      "credentials": {
+        "slackApi": {
+          "id": "ULGQuovNyLfoRskU",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YDOmtUprxjOFmMHm4CUUioUCDdqUpvnyN5LG1qIvumg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Recipients",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YDOmtUprxjOFmMHm4CUUioUCDdqUpvnyN5LG1qIvumg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "d0b711ee-f6b5-44d6-95d3-f91262a07f31",
+      "name": "Get Recipients from Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        4272,
+        656
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GjK918nc697UgBg0",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const recipients = $input.all();\nconst html = $('Extract & Validate HTML Output').first().json.html;\nconst dateFormatted = $('Extract & Validate HTML Output').first().json.dateFormatted;\n\nreturn recipients.map(item => {\n  const name  = item.json.Name  || '';\n  const email = item.json.Email || '';\n  const title = item.json.Title || '';\n\n  if (!email || !email.includes('@')) {\n    return null; // skip invalid rows\n  }\n\n  const greetingBlock = '<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;border-collapse:collapse;\"><tr><td style=\"padding:16px 20px;background-color:#ffffff;border-bottom:1px solid #e0e0e0;\"><p style=\"margin:0 0 6px 0;font-size:14px;color:#333333;\">Dear ' + title + ' ' + name + ',</p><p style=\"margin:0;font-size:13px;color:#666666;\">Please find this week\\'s edition of The Clinical Brief below.</p></td></tr></table>';\n\n  const htmlBody = greetingBlock + html;\n\n  return {\n    json: {\n      recipientEmail: email,\n      recipientName: name,\n      recipientTitle: title,\n      dateFormatted: dateFormatted,\n      htmlBody: htmlBody\n    }\n  };\n}).filter(item => item !== null);"
+      },
+      "id": "198d6b73-3430-4c1c-b7d7-9184518431f4",
+      "name": "Prepare Personalised Email Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4512,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipientEmail }}",
+        "subject": "=The Clinical Brief | {{ $json.dateFormatted }}",
+        "message": "={{ $json.htmlBody }}",
+        "options": {}
+      },
+      "id": "c758bdb2-6759-4cfa-8bda-e05e67e07e1c",
+      "name": "Send Personalised Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        4752,
+        656
+      ],
+      "webhookId": "14ba5484-a7ca-4b2f-b2e7-e0487db0ab57",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "98kqDPn81p3IxysL",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Monthly Periodic Newsletter Automation for Doctors on latest research and medical updates from verified sources",
+        "height": 1216,
+        "width": 3632,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1376,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "0f1db6ad-bd4a-46a0-a417-3a4239ed3aa8",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Two HTTP request nodes are temporarily deactivated\n* Node 04 Fetch Academic Papers  - Restricted per-day usage for free use\n* Node 05 Fetch Medical Web Articles - Restricted by Google API key\n",
+        "width": 528
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3120,
+        720
+      ],
+      "typeVersion": 1,
+      "id": "f4472ce4-dde0-44e4-ab3f-5b2690771842",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Slack Slash Command Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Topic & Dates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Topic & Dates": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Slack Command",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Academic Papers",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Health News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Medical Web Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Academic Papers": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Medical Web Articles": {
+      "main": [
+        [
+          {
+            "node": "Merge All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Sources": {
+      "main": [
+        []
+      ]
+    },
+    "Normalise Deduplicate Filter": {
+      "main": [
+        [
+          {
+            "node": "Prepare LLM Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare LLM Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Newsletter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Newsletter": {
+      "main": [
+        [
+          {
+            "node": "Extract & Validate HTML Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Validate HTML Output": {
+      "main": [
+        [
+          {
+            "node": "Post HTML Summary to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Recipients from Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recipients from Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Prepare Personalised Email Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Personalised Email Items": {
+      "main": [
+        [
+          {
+            "node": "Send Personalised Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Health News": {
+      "main": [
+        [
+          {
+            "node": "Normalise Deduplicate Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveExecutionProgress": true,
+    "executionTimeout": 180
+  },
+  "versionId": "86eb9b1d-fdf7-4049-9539-92dedfeaacf7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f0e00f13fda03f5241b1cbf4a11b21e11bab188ea227eafcf3fc5a94879729ce"
+  },
+  "id": "50DSOxCxF4hlcN98",
+  "tags": []
+}
